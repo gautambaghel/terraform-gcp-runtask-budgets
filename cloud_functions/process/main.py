@@ -2,8 +2,8 @@ import logging
 import os
 import functions_framework
 import google.cloud.logging
-import googleproject
-import terraformcloud
+import terraform_cloud
+import google_genai
 from typing import List
 
 # Setup google cloud logging and ignore errors if authentication fails
@@ -28,7 +28,7 @@ else:
 def process_handler(request):
     try:
         logging.info("headers: " + str(request.headers))
-        logging.info("payload: " + str(request.get_data()))
+        logging.info("payload: " + str(request.get_data())) # Remove API token and log the payload
 
         payload = request.get_json(silent=True)
         http_message = "{}"
@@ -38,8 +38,17 @@ def process_handler(request):
             run_id = payload["run_id"]
             tfc_api_key = payload["tfc_api_key"]
 
-            # Download terraform plan from TFC
-            comment_response_json, comment_json_msg = __attach_comment("comment", tfc_api_key, run_id)
+            # Get error from Terraform Cloud
+            run_error_response, run_error_json_msg = __get_run_error(tfc_api_key, run_id)
+            logging.info("Run error: " + str(run_error_response))
+
+            proj = google_genai.GoogleProject()
+            content = proj.generate_content(run_error_response, stream=False)
+
+            logging.info("Gemini response: " + str(content))
+
+            # Create a comment in Terraform Cloud
+            comment_response_json, comment_json_msg = __attach_comment(content, tfc_api_key, run_id)
 
             http_message = {"message": comment_response_json, "status": "ok"}
             http_code = 200
@@ -63,15 +72,27 @@ def process_handler(request):
 
         return http_message, http_code
 
+
+def __get_run_error(tfc_api_key: str, run_id: str) -> (dict, str):
+    message = ""
+    run_error_response = ""
+
+    try:
+        run_error_response = terraform_cloud.get_run_error(tfc_api_key, run_id)
+    except Exception as e:
+        logging.warning("Warning: {}".format(e))
+        message = "Failed to get error from the run in Terraform Cloud. Please check the Run id and TFC API key."
+
+    return run_error_response, message
+
 def __attach_comment(comment: str, tfc_api_key: str, run_id: str) -> (dict, str):
     message = ""
     comment_response_json = {}
 
     try:
-        comment_response_json = terraformcloud.attach_comment(comment, tfc_api_key, run_id)
-        # logging.info("plan_json: " + str(plan_json))
+        comment_response_json = terraform_cloud.attach_comment(comment, tfc_api_key, run_id)
     except Exception as e:
         logging.warning("Warning: {}".format(e))
-        message = "Failed to create comment in Terraform Cloud. Please check the run id and TFC API key."
+        message = "Failed to create comment in Terraform Cloud. Please check the Run id and TFC API key."
 
     return comment_response_json, message
