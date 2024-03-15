@@ -1,20 +1,20 @@
-data "archive_file" "runtask_request" {
+data "archive_file" "request" {
   type        = "zip"
-  source_dir  = "../cloud_functions/runtask_request"
-  output_path = "../build/runtask_request.zip"
+  source_dir  = "../cloud_functions/request"
+  output_path = "../build/request.zip"
 
   excludes = ["__pycache__", "testing", "Makefile"]
 }
 
-resource "google_storage_bucket_object" "runtask_request" {
-  name   = "runtask_request_${random_string.suffix.id}_${data.archive_file.runtask_request.output_md5}.zip"
+resource "google_storage_bucket_object" "request" {
+  name   = "request_${random_string.suffix.id}_${data.archive_file.request.output_md5}.zip"
   bucket = google_storage_bucket.cloud_functions.name
-  source = data.archive_file.runtask_request.output_path
+  source = data.archive_file.request.output_path
 }
 
-resource "google_cloudfunctions2_function" "runtask_request" {
-  name        = "runtask-request-${random_string.suffix.id}"
-  description = "runtask-request handler"
+resource "google_cloudfunctions2_function" "request" {
+  name        = "request-${random_string.suffix.id}"
+  description = "request handler"
   location    = var.region
 
   build_config {
@@ -23,7 +23,7 @@ resource "google_cloudfunctions2_function" "runtask_request" {
     source {
       storage_source {
         bucket = google_storage_bucket.cloud_functions.name
-        object = google_storage_bucket_object.runtask_request.name
+        object = google_storage_bucket_object.request.name
       }
     }
   }
@@ -32,39 +32,40 @@ resource "google_cloudfunctions2_function" "runtask_request" {
     available_cpu    = "1"
     available_memory = "192Mi"
     environment_variables = {
-      HMAC_KEY         = var.hmac_key
-      RUNTASK_PROJECT  = var.project_id
-      RUNTASK_REGION   = var.region
-      RUNTASK_WORKFLOW = google_workflows_workflow.runtask-budgets.name
+      TFC_API_KEY           = var.tfc_api_key
+      HMAC_KEY              = var.hmac_key
+      GOOGLE_PROJECT        = var.project_id
+      GOOGLE_REGION         = var.region
+      NOTIFICATION_WORKFLOW = google_workflows_workflow.notification_workflow.name
     }
     ingress_settings                 = "ALLOW_ALL"
     max_instance_count               = 1
     max_instance_request_concurrency = 10
-    service_account_email            = google_service_account.cloud_function_runtasks.email
+    service_account_email            = google_service_account.cf_notification.email
     timeout_seconds                  = 30
   }
 }
 
 # IAM entry for apigw to invoke the function
-resource "google_cloudfunctions2_function_iam_member" "runtask_request_invoker" {
-  project        = google_cloudfunctions2_function.runtask_request.project
-  location       = google_cloudfunctions2_function.runtask_request.location
-  cloud_function = google_cloudfunctions2_function.runtask_request.name
+resource "google_cloudfunctions2_function_iam_member" "request_invoker" {
+  project        = google_cloudfunctions2_function.request.project
+  location       = google_cloudfunctions2_function.request.location
+  cloud_function = google_cloudfunctions2_function.request.name
   role           = "roles/cloudfunctions.invoker"
-  member         = "serviceAccount:${google_service_account.apigw_runtasks.email}"
+  member         = "serviceAccount:${google_service_account.apigw.email}"
 }
 
-resource "google_cloud_run_service_iam_member" "runtask_request_cloud_run_invoker" {
-  project  = google_cloudfunctions2_function.runtask_request.project
-  location = google_cloudfunctions2_function.runtask_request.location
-  service  = google_cloudfunctions2_function.runtask_request.name
+resource "google_cloud_run_service_iam_member" "request_cloud_run_invoker" {
+  project  = google_cloudfunctions2_function.request.project
+  location = google_cloudfunctions2_function.request.location
+  service  = google_cloudfunctions2_function.request.name
   role     = "roles/run.invoker"
-  member   = "serviceAccount:${google_service_account.apigw_runtasks.email}"
+  member   = "serviceAccount:${google_service_account.apigw.email}"
 }
 
 check "cloudfunction_request_health" {
   data "http" "cloudfunction_request" {
-    url = google_cloudfunctions2_function.runtask_request.url
+    url = google_cloudfunctions2_function.request.url
   }
   assert {
     condition     = data.http.cloudfunction_request.status_code == 403

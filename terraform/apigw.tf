@@ -1,25 +1,25 @@
-resource "google_api_gateway_api" "runtasks" {
+resource "google_api_gateway_api" "tfc_notifications" {
   provider = google-beta
 
   api_id       = "apigw-${random_string.suffix.id}"
-  display_name = "TFC Run Tasks ${random_string.suffix.id}"
+  display_name = "TFC Notifications ${random_string.suffix.id}"
 }
 
-resource "google_api_gateway_api_config" "runtasks" {
+resource "google_api_gateway_api_config" "tfc_notifications" {
   provider      = google-beta
-  api           = google_api_gateway_api.runtasks.api_id
+  api           = google_api_gateway_api.tfc_notifications.api_id
   api_config_id = "apigw-config-${random_string.suffix.id}"
 
   gateway_config {
     backend_config {
-      google_service_account = google_service_account.apigw_runtasks.email
+      google_service_account = google_service_account.apigw.email
     }
   }
 
   openapi_documents {
     document {
       path     = "spec.yaml"
-      contents = base64encode(templatefile("files/openapi.yaml", { "request_url" = google_cloudfunctions2_function.runtask_request.url }))
+      contents = base64encode(templatefile("${path.module}/files/openapi.yaml", { "request_url" = google_cloudfunctions2_function.request.url }))
     }
   }
   lifecycle {
@@ -27,9 +27,9 @@ resource "google_api_gateway_api_config" "runtasks" {
   }
 }
 
-resource "google_api_gateway_gateway" "runtasks" {
+resource "google_api_gateway_gateway" "tfc_notifications" {
   provider   = google-beta
-  api_config = google_api_gateway_api_config.runtasks.id
-  gateway_id = google_api_gateway_api.runtasks.api_id
-  region     = var.region
+  api_config = google_api_gateway_api_config.tfc_notifications.id
+  gateway_id = google_api_gateway_api.tfc_notifications.api_id
+  region     = var.gw_region
 }

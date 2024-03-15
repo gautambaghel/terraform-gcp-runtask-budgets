@@ -6,7 +6,13 @@ variable "project_id" {
 variable "region" {
   description = "Region for deployment"
   type        = string
-  default     = "europe-west1"
+  default     = "us-west1"
+}
+
+variable "gw_region" {
+  description = "Region for gateway deployment"
+  type        = string
+  default     = "us-west2"
 }
 
 variable "hmac_key" {
@@ -15,8 +21,7 @@ variable "hmac_key" {
   default     = "secret"
 }
 
-variable "project_viewer" {
-  description = "Project ids to assign viewer access for runtask_process cloud function service account"
-  type        = list(string)
-  default     = null
+variable "tfc_api_key" {
+  description = "TFC API key for comment API requests"
+  type        = string
 }

@@ -12,7 +12,7 @@ from runtask_request import main
 @pytest.fixture(scope="session")
 def test_request():
     headers = {
-        "x-tfc-task-signature": "b7832ce69b791e39105e50ca55039aede4778caec8e24a20c2f6acaa5274e397cef80a450b44acd6fcc62517784ae970021c338314301c5f39e7ae579db29249"
+        "x-tfe-notification-signature": "b7832ce69b791e39105e50ca55039aede4778caec8e24a20c2f6acaa5274e397cef80a450b44acd6fcc62517784ae970021c338314301c5f39e7ae579db29249"
     }
 
     payload = {
@@ -33,7 +33,7 @@ def test__validate_request(test_request):
 
 def test_validate_hmac(test_request):
     key = "secret"
-    result = main.__validate_hmac(key, json.dumps(test_request["payload"]).encode("utf-8"), test_request["headers"]["x-tfc-task-signature"])
+    result = main.__validate_hmac(key, json.dumps(test_request["payload"]).encode("utf-8"), test_request["headers"]["x-tfe-notification-signature"])
     assert result == True
 
 

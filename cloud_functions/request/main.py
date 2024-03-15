@@ -34,22 +34,25 @@ if "HMAC_KEY" in os.environ:
 else:
     HMAC_KEY = False
 
-RUNTASK_STAGES = ["post_plan", "test"]
-
-if "RUNTASK_PROJECT" in os.environ:
-    RUNTASK_PROJECT = os.environ["RUNTASK_PROJECT"]
+if "TFC_API_KEY" in os.environ:
+    TFC_API_KEY = os.environ["TFC_API_KEY"]
 else:
-    RUNTASK_PROJECT = False
+    TFC_API_KEY = False
 
-if "RUNTASK_REGION" in os.environ:
-    RUNTASK_REGION = os.environ["RUNTASK_REGION"]
+if "GOOGLE_PROJECT" in os.environ:
+    GOOGLE_PROJECT = os.environ["GOOGLE_PROJECT"]
 else:
-    RUNTASK_REGION = False
+    GOOGLE_PROJECT = False
 
-if "RUNTASK_WORKFLOW" in os.environ:
-    RUNTASK_WORKFLOW = os.environ["RUNTASK_WORKFLOW"]
+if "GOOGLE_REGION" in os.environ:
+    GOOGLE_REGION = os.environ["GOOGLE_REGION"]
 else:
-    RUNTASK_WORKFLOW = False
+    GOOGLE_REGION = False
+
+if "NOTIFICATION_WORKFLOW" in os.environ:
+    NOTIFICATION_WORKFLOW = os.environ["NOTIFICATION_WORKFLOW"]
+else:
+    NOTIFICATION_WORKFLOW = False
 
 if 'LOG_LEVEL' in os.environ:
     logging.getLogger().setLevel(os.environ['LOG_LEVEL'])
@@ -68,18 +71,22 @@ def request_handler(request):
         http_code = 422
 
         if not HMAC_KEY:
-            http_message = "HMAC key environment variable missing on server"
+            http_message = "HMAC_KEY key environment variable missing on server"
             http_code = 500
             logging.error(http_message)
-        elif not RUNTASK_PROJECT:
+        elif not TFC_API_KEY:
+            http_message = "TFC_API_KEY key environment variable missing on server"
+            http_code = 500
+            logging.error(http_message)
+        elif not GOOGLE_PROJECT:
             http_message = "Project environment variable missing on server"
             http_code = 500
             logging.error(http_message)
-        elif not RUNTASK_REGION:
+        elif not GOOGLE_REGION:
             http_message = "Region environment variable missing on server"
             http_code = 500
             logging.error(http_message)
-        elif not RUNTASK_WORKFLOW:
+        elif not NOTIFICATION_WORKFLOW:
             http_message = "Workflow name environment variable missing on server"
             http_code = 500
             logging.error(http_message)
@@ -87,10 +94,11 @@ def request_handler(request):
             result, message = __validate_request(request_headers, request_payload)
             if result:
                 # Check HMAC signature
-                signature = request_headers['x-tfc-task-signature']
+                signature = request_headers['x-tfe-notification-signature']
                 # Need to use request.get_data() for hmac digest
                 if __validate_hmac(HMAC_KEY, request.get_data(), signature):
                     try:
+                        request_payload["tfc_api_key"] = TFC_API_KEY
                         __execute_workflow(request_payload)
                         http_message = "OK"
                         http_code = 200
@@ -110,8 +118,8 @@ def request_handler(request):
         return http_message, http_code
 
     except Exception as e:
-        logging.exception("Run Task Request error: {}".format(e))
-        http_message = "Internal Run Task Request error occurred"
+        logging.exception("Terraform Cloud notification Request error: {}".format(e))
+        http_message = "Internal notification API error occurred"
         http_code = 500
         logging.warning(f"{http_code} - {http_message}: {e}")
 
@@ -134,7 +142,7 @@ def __validate_request(headers, payload) -> (bool, str):
         logging.warning(message)
         result = False
 
-    elif "x-tfc-task-signature" not in headers:
+    elif "x-tfe-notification-signature" not in headers:
         message = "TFC Task signature missing"
         logging.warning(message)
         result = False
@@ -144,18 +152,8 @@ def __validate_request(headers, payload) -> (bool, str):
         logging.warning(message)
         result = False
 
-    elif "stage" not in payload.keys():
-        message = "TFC payload missing : stage"
-        logging.warning(message)
-        result = False
-
     elif "workspace_name" not in payload.keys():
         message = "TFC payload missing : workspace_name"
-        logging.warning(message)
-        result = False
-
-    elif "plan_json_api_url" not in payload.keys():
-        message = "TFC payload missing : plan_json_api_url"
         logging.warning(message)
         result = False
 
@@ -164,21 +162,11 @@ def __validate_request(headers, payload) -> (bool, str):
         logging.warning(message)
         result = False
 
-    elif WORKSPACE_PREFIX and not (str(payload["workspace_name"]).startswith(WORKSPACE_PREFIX)):
-        message = "TFC workspace prefix verification failed : {}".format(payload["workspace_name"])
-        logging.warning(message)
-        result = False
-
-    elif RUNTASK_STAGES and not (payload["stage"] in RUNTASK_STAGES):
-        message = "TFC Runtask stage verification failed: {}".format(payload["stage"])
-        logging.warning(message)
-        result = False
-
     return result, message
 
 
 def __validate_hmac(key: str, payload: str, signature: str) -> bool:
-    """Returns true if the x-tfc-task-signature header matches the SHA512 digest of the payload"""
+    """Returns true if the x-tfe-notification-signature header matches the SHA512 digest of the payload"""
 
     digest = hmac.new(bytes(key, 'utf-8'), msg=payload, digestmod=hashlib.sha512).hexdigest()
     result = hmac.compare_digest(digest, signature)
@@ -189,8 +177,8 @@ def __validate_hmac(key: str, payload: str, signature: str) -> bool:
     return result
 
 
-def __execute_workflow(payload: dict, project: str = RUNTASK_PROJECT, location: str = RUNTASK_REGION,
-                       workflow: str = RUNTASK_WORKFLOW) -> Execution:
+def __execute_workflow(payload: dict, project: str = GOOGLE_PROJECT, location: str = GOOGLE_REGION,
+                       workflow: str = NOTIFICATION_WORKFLOW) -> Execution:
     """
     Execute a workflow and print the execution results
 
