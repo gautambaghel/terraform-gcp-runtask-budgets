@@ -11,5 +11,5 @@ provider "google-beta" {
 provider "google" {
   project = var.project_id
   region  = var.region
-  credentials = "keys.json"
+  credentials = "../../keys.json"
 }

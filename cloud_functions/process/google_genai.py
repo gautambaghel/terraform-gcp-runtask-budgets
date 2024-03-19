@@ -23,7 +23,7 @@ class GoogleProject:
 
     def generate_content(self, help_string: str, stream: bool = False) -> str:
         response = self.model.generate_content(
-            f"""{help_string}""",
+            f"""Can you help with this Terraform error, please? {help_string}""",
             generation_config={
                 "max_output_tokens": 5535,
                 "temperature": 0.7,
@@ -37,7 +37,7 @@ class GoogleProject:
             },
             stream=stream,
         )
-        return response.text
+        return f":sparkles: Terraform AI debugger (powered by Google Gemini) :sparkles: \n\n + {response.text}"
 
 if __name__ == "__main__":
     proj = GoogleProject()
